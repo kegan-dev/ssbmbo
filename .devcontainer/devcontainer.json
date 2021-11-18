@@ -1,0 +1,20 @@
+// For format details, see https://aka.ms/vscode-remote/devcontainer.json or this file's README at:
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.112.0/containers/ubuntu-18.04-git
+{
+	"name": "Marlowe Stack",
+	"dockerFile": "Dockerfile",
+
+	// Set *default* container specific settings.json values on container create.
+	"settings": { 
+		"terminal.integrated.shell.linux": "/bin/bash",
+        "ghcSimple.replCommand": "stack repl"
+	},
+
+	// Add the IDs of extensions you want installed when the container is created.
+	"extensions": [
+		"dramforever.vscode-ghc-simple",
+		"justusadam.language-haskell",
+		"zachsez.vcode-ppc",
+		"ms-vscode.hexeditor"
+	]
+}

@@ -1,6 +1,9 @@
 # ssbmbo
 
-Tool to inject code into memory card. This will run the input assembly once the exploit is used.
+Tool to inject code into memory card. This will run the input assembly once the
+exploit is used.
+
+Assemblers 
 
 Helpful assembler information http://wiibrew.org/wiki/Assembler_Tutorial
 
@@ -36,4 +39,13 @@ C3898000 3EE66666
 BA810008 800100B4
 382100B0 7C0803A6
 38980000 00000000
+```
+
+Compiling code in devcontainer. Gives raw machine code in a binary file
+corresponding to our assembly.
+
+```
+./bin/linux_x86_64/powerpc-eabi-as -W -mregnames -mgekko -o ./src2.o ./test.asm
+./bin/linux_x86_64/powerpc-eabi-ld -Ttext 0x80000000 -o ./src2.o ./src1.o
+./bin/linux_x86_64/powerpc-eabi-objcopy -O binary ./src2.o code.bin
 ```
