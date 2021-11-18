@@ -14,7 +14,6 @@
 	"extensions": [
 		"dramforever.vscode-ghc-simple",
 		"justusadam.language-haskell",
-		"zachsez.vcode-ppc",
 		"ms-vscode.hexeditor"
 	]
 }
