@@ -1,6 +1,6 @@
 FROM ubuntu:18.04
 
-# Get stack and dependencies for Marlowe
+# Get stack and useful dependencies
 RUN apt-get update && apt-get install -y curl glpk-utils libglpk-dev glpk-doc
 RUN curl -sSL https://get.haskellstack.org/ | sh
 
