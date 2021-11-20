@@ -45,7 +45,7 @@ Compiling code in devcontainer. Gives raw machine code in a binary file
 corresponding to our assembly.
 
 ```
-./bin/linux_x86_64/powerpc-eabi-as -W -mregnames -mgekko -o ./src2.o ./test.asm
+./bin/linux_x86_64/powerpc-eabi-as -W -mregnames -mgekko -o ./src1.o ./test.asm
 ./bin/linux_x86_64/powerpc-eabi-ld -Ttext 0x80000000 -o ./src2.o ./src1.o
 ./bin/linux_x86_64/powerpc-eabi-objcopy -O binary ./src2.o code.bin
 ```
