@@ -1,6 +1,7 @@
 module Lib
     ( 
-        someFunc
+        pack,
+        encode
     )
     where
 
@@ -32,6 +33,22 @@ memList = [             --Melee start address for each GCI block
         0x00000000,     --Block 8 (not in memory)
         0x8045bf28      --Block 9
         ]
+
+unkArr = [
+    0x00000026,
+    0x000000FF,
+    0x000000E8,
+    0x000000EF,
+    0x00000042,
+    0x000000D6,
+    0x00000001,
+    0x00000054,
+    0x00000014,
+    0x000000A3,
+    0x00000080,
+    0x000000FD,
+    0x0000006E
+    ]
 
 blockStart = blockList !! 0
 blockEnd = blockList !! 9 + blockSize !! 9
@@ -89,32 +106,77 @@ dataToCardLocations memAddress bytes =
 unpack :: [Word8] -> [Word8]
 unpack packed = undefined
 
-encode :: Word8 -> Word8 -> Word8
-encode prev cur = undefined
+-- |Encodes a bit correctly. See
+-- https://github.com/dansalvato/melee-gci-compiler for the algorithm source.
+encode :: Word32 -> Word32 -> Word32
+encode prev cur =
+    let
+        prevInt = toInteger prev
+        curInt = toInteger cur
+        rotl :: Integer -> Integer -> Integer
+        rotl rx sh = if sh >= 32 then error "Shift must be between 0 and 31." else ((shiftL rx (fromInteger sh)) .&. 0xffffffff) .|. (shiftR rx (fromInteger ((32 - sh) .&. 31)))
+        --rotl rx sh = if sh >= 32 then error "Shift must be between 0 and 31." else rotateL rx (fromIntegral sh)
+        mask :: Integer -> Integer -> Integer
+        mask mb me =
+            let
+                x = shiftR 0xffffffff (fromInteger mb)
+                y = (shiftL 0xffffffff (31 - fromInteger me))
+            in
+                if mb >= 32 || me >= 32 then error "Arguments must be between 0 and 31."
+                else if mb <= me then x .&. y else x .|. y
+        rlwinm :: Integer -> Integer -> Integer -> Integer -> Integer
+        rlwinm rs sh mb me = (rotl rs sh) .&. (mask mb me)
+        rlwimi :: Integer -> Integer -> Integer -> Integer -> Integer -> Integer
+        rlwimi ra rs sh mb me =
+            let
+                m = mask mb me
+                r = rotl rs sh
+            in
+                (r .&. m) .|. (ra .&. (complement m))
+        r5_1 = (shiftR (toInteger $ prevInt * 0x4ec4ec4f) 32) .&. 0xffffffff
+        r0_1 = if prevInt == 0 then 0x92492493 else (complement 0x92492493) .&. (0xffffffff)
+        r0_2 = if prevInt == 0 then (shiftR (r0_1 * prevInt) 32) .&. 0xffffffff else (shiftR (complement (r0_1 * prevInt)) 32) .&. 0xffffffff
+        r3_1 = shiftR r5_1 2
+        r5_2 = rlwinm r3_1 1 31 31
+        r0_3 = (r0_2 + prevInt) .&. 0xff
+        r3_2 = r3_1 + r5_2
+        r0_4 = shiftR r0_3 2
+        r5_3 = r3_2 * 13
+        r3_3 = rlwinm r0_4 1 31 31
+        r0_5 = r0_4 + r3_3
+        r0_6 = r0_5 * 7
+        r5_4 = (prevInt - r5_3) .&. 0xff
+        r0_7 = (prevInt - r0_6) .&. 0xff
+        r5_5 = rlwinm r5_4 2 0 29
+        r5_6 = unkArr !! (fromInteger (div r5_5 4))
+        r3_4 = xor prevInt curInt
+        r3_5 = xor r3_4 r5_6
+        r0_8 = if r0_7 > 6 then error "r0 should be no greater than 6" else rlwinm r0_7 2 0 29
+    in
+        if r0_8 == 0x0 then fromInteger $ (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm r3_5 3 27 27) r3_5 0 31 31) r3_5 31 30 30) r3_5 2 26 26) r3_5 30 29 29) r3_5 1 25 25) r3_5 29 28 28) r3_5 0 24 24) 0 24 31) .&. 0xffffffff
+        else if r0_8 == 0x4 then fromInteger $ (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm r3_5 31 31 31) r3_5 3 28 28) r3_5 0 29 29) r3_5 3 25 25) r3_5 1 26 26) r3_5 31 27 27) r3_5 1 24 24) r3_5 26 30 30) 0 24 31) .&. 0xffffffff
+        else if r0_8 == 0x8 then fromInteger $ (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm r3_5 4 26 26) r3_5 6 25 25) r3_5 30 31 31) r3_5 30 30 30) r3_5 31 28 28) r3_5 2 24 24) r3_5 28 29 29) r3_5 29 27 27) 0 24 31) .&. 0xffffffff
+        else if r0_8 == 0xc then fromInteger $ (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm r3_5 2 28 28) r3_5 1 30 30) r3_5 5 24 24) r3_5 1 27 27) r3_5 28 31 31) r3_5 29 29 29) r3_5 31 26 26) r3_5 31 25 25) 0 24 31) .&. 0xffffffff
+        else if r0_8 == 0x10 then fromInteger $ (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm r3_5 1 29 29) r3_5 7 24 24) r3_5 3 26 26) r3_5 29 31 31) r3_5 2 25 25) r3_5 28 30 30) r3_5 30 27 27) r3_5 28 28 28) 0 24 31) .&. 0xffffffff
+        else if r0_8 == 0x14 then fromInteger $ (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm r3_5 5 25 25) r3_5 5 26 26) r3_5 2 27 27) r3_5 0 28 28) r3_5 3 24 24) r3_5 27 31 31) r3_5 27 30 30) r3_5 27 29 29) 0 24 31) .&. 0xffffffff
+        else if r0_8 == 0x18 then fromInteger $ (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm r3_5 0 30 30) r3_5 2 29 29) r3_5 4 25 25) r3_5 4 24 24) r3_5 0 27 27) r3_5 30 28 28) r3_5 26 31 31) r3_5 30 26 26) 0 24 31) .&. 0xffffffff
+        else fromInteger $ r3_5 .&. 0xffffffff
 
--- |Packs a raw card
+-- |Packs a raw card to gci format.
 pack :: [Word8] -> [Word8]
 pack unpacked =
     let
-        prevByteOffset = 0x204f
-        baseOffset = 0x2050
-        dataSize = 0x1ff0
         blockSizeByte1 = unpacked !! 0x38
         blockSizeByte2 = unpacked !! 0x39
-        blockSize = (shiftL (toInteger blockSizeByte1) 8) + (toInteger blockSizeByte2) -- big endian
-        prevByteOffsets = [(prevByteOffset + 0x2000 * x, baseOffset + 0x2000 * x) | x <- [0..blockSize-2]] --Next is [(Integer, Word8)] to map to where the modified bits will go.
-        foldFunc convertedByteBlocks (prevOff, baseOff) = 
-            let
-                byteIxToConvert = [baseOff..baseOff+dataSize-1]
-                bytesToConvert = map ((unpacked !!) . fromInteger) byteIxToConvert
-                initialPrevRes = unpacked !! (fromInteger prevOff)
-                innerFoldFunc (prevRes, packedBytes) curByte = (encode prevRes curByte, encode prevRes curByte : packedBytes)
-                (_, convertedBytes) = foldl innerFoldFunc (initialPrevRes, []) bytesToConvert
-            in
-                (reverse convertedBytes:convertedByteBlocks)
-        allConvertedByteBlocks = foldl foldFunc [] prevByteOffsets
+        blockSize = (shiftL (toInteger blockSizeByte1) 8) + (toInteger blockSizeByte2)
+        blockRanges = map (\i -> (0x2050 + (0x2000 * i), 0x2050 + 0x1ff0 + (0x2000 * i))) [0..blockSize-2]
+        encodeLoop :: Integer -> [Word8] -> [Word8] -> [Word8]
+        encodeLoop i ps [] = ps
+        encodeLoop i [] (u:us) = encodeLoop (i+1) [u] us
+        encodeLoop i (p:ps) (u:us) =
+            if any (\(f,l) -> i >= f && i < l) blockRanges
+            then encodeLoop (i+1) ((fromIntegral $ encode (fromIntegral p) (fromIntegral u)):p:ps) us
+            else encodeLoop (i+1) (u:p:ps) us
     in
-        undefined
-
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"
+        reverse $ encodeLoop 0 [] unpacked
+ 
