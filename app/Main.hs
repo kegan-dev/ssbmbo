@@ -9,4 +9,4 @@ main = do
     args <- getArgs
     fContents <- BS.readFile (head args)
     --BS.putStr (BS.pack . SSBMBO.pack . BS.unpack $ fContents)
-    BS.writeFile (head . tail $ args) (BS.pack . SSBMBO.pack . BS.unpack $ fContents)
+    BS.writeFile (head . tail $ args) (BS.pack . SSBMBO.pack . SSBMBO.recomputeChecksums . BS.unpack $ fContents)

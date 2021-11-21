@@ -1,7 +1,8 @@
 module Lib
     ( 
         pack,
-        encode
+        encode,
+        recomputeChecksums
     )
     where
 
@@ -162,13 +163,20 @@ encode prev cur =
         else if r0_8 == 0x18 then fromInteger $ (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm r3_5 0 30 30) r3_5 2 29 29) r3_5 4 25 25) r3_5 4 24 24) r3_5 0 27 27) r3_5 30 28 28) r3_5 26 31 31) r3_5 30 26 26) 0 24 31) .&. 0xffffffff
         else fromInteger $ r3_5 .&. 0xffffffff
 
--- |Packs a raw card to gci format.
-pack :: [Word8] -> [Word8]
-pack unpacked =
+getBlockSize :: [Word8] -> Integer
+getBlockSize unpacked = 
     let
         blockSizeByte1 = unpacked !! 0x38
         blockSizeByte2 = unpacked !! 0x39
         blockSize = (shiftL (toInteger blockSizeByte1) 8) + (toInteger blockSizeByte2)
+    in
+        blockSize
+
+-- |Packs a raw card to gci format.
+pack :: [Word8] -> [Word8]
+pack unpacked =
+    let
+        blockSize = getBlockSize unpacked
         blockRanges = map (\i -> (0x2050 + (0x2000 * i), 0x2050 + 0x1ff0 + (0x2000 * i))) [0..blockSize-2]
         encodeLoop :: Integer -> [Word8] -> [Word8] -> [Word8]
         encodeLoop i ps [] = ps
@@ -180,3 +188,36 @@ pack unpacked =
     in
         reverse $ encodeLoop 0 [] unpacked
  
+recomputeChecksums :: [Word8] -> [Word8]
+recomputeChecksums badBytes =
+    let
+        blockSize = getBlockSize badBytes
+        blockData = map (\i -> take 0x1ff0 . drop (0x2050 + 0x2000 * i) $ badBytes) [0..(fromInteger blockSize)-2]
+        blockChecksums = map (\b -> getChecksum 0 [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10] b) blockData
+        
+        finalizeChecksum :: Int -> [Word8] -> [Word8]
+        finalizeChecksum i checksum = 
+            let
+                x = checksum !! (i - 1)
+                y = checksum !! i
+                (newChecksum1, _:newChecksum2) = splitAt i checksum
+                newChecksum = if x == y then newChecksum1 ++ [xor y 0x00ff] ++ newChecksum2 else checksum
+            in
+                if i >= 0xf
+                then checksum
+                else finalizeChecksum (i + 1) newChecksum
+
+        getChecksum :: Int -> [Word8] -> [Word8] -> [Word8]
+        getChecksum i checksum [] = finalizeChecksum 1 checksum
+        getChecksum i checksum (b:bs) =
+            let
+                arrPos = i
+                curArr = checksum !! (arrPos .&. 0xf)
+                (newChecksum1, _:newChecksum2) = splitAt (arrPos .&. 0xf) checksum
+                newChecksum = newChecksum1 ++ [(b + curArr) .&. 0xff] ++ newChecksum2
+            in
+                if length newChecksum > 16 then error "Too long checksum" else getChecksum (i + 1) newChecksum bs
+
+        blocksAndChecksums = zip blockChecksums blockData
+    in
+        foldl (\acc (c, b) -> acc ++ c ++ b) (take 0x2040 badBytes) blocksAndChecksums
