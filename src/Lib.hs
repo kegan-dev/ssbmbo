@@ -187,7 +187,8 @@ pack unpacked =
             else encodeLoop (i+1) (u:p:ps) us
     in
         reverse $ encodeLoop 0 [] unpacked
- 
+
+-- |Sets the correct checksums in the raw memory card.
 recomputeChecksums :: [Word8] -> [Word8]
 recomputeChecksums badBytes =
     let
