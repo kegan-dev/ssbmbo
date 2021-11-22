@@ -20,4 +20,4 @@ main = do
     putStrLn $ "Output gci file: " ++ outputGciFile
     fContents <- BS.readFile (inputGciFile)
     --BS.putStr (BS.pack . SSBMBO.pack . BS.unpack $ fContents)
-    BS.writeFile outputGciFile (BS.pack . SSBMBO.pack . SSBMBO.recomputeChecksums . BS.unpack $ fContents)
+    BS.writeFile outputGciFile (BS.pack . SSBMBO.pack . SSBMBO.recomputeChecksums . SSBMBO.unpack . BS.unpack $ fContents)

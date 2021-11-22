@@ -1,13 +1,14 @@
 module Lib
     ( 
         pack,
-        encode,
-        recomputeChecksums
+        recomputeChecksums,
+        unpack
     )
     where
 
 import Data.Word
 import Data.Bits
+import Debug.Trace
 
 blockList = [           --GCI block offset list
         0x02060,        --Block 0
@@ -103,9 +104,83 @@ dataToCardLocations memAddress bytes =
     in
         cardAddressBytes
 
+rotl :: Integer -> Integer -> Integer
+rotl rx sh = if sh >= 32 then error "Shift must be between 0 and 31." else ((shiftL rx (fromInteger sh)) .&. 0xffffffff) .|. (shiftR rx (fromInteger ((32 - sh) .&. 31)))
+        --rotl rx sh = if sh >= 32 then error "Shift must be between 0 and 31."
+        --else rotateL rx (fromIntegral sh)
+
+mask :: Integer -> Integer -> Integer
+mask mb me =
+    let
+        x = shiftR 0xffffffff (fromInteger mb)
+        y = (shiftL 0xffffffff (31 - fromInteger me))
+    in
+        if mb >= 32 || me >= 32 then error "Arguments must be between 0 and 31."
+        else if mb <= me then x .&. y else x .|. y
+
+rlwinm :: Integer -> Integer -> Integer -> Integer -> Integer
+rlwinm rs sh mb me = (rotl rs sh) .&. (mask mb me)
+rlwimi :: Integer -> Integer -> Integer -> Integer -> Integer -> Integer
+rlwimi ra rs sh mb me =
+    let
+        m = mask mb me
+        r = rotl rs sh
+    in
+        (r .&. m) .|. (ra .&. (complement m))
+
+decode :: Word32 -> Word32 -> Word32
+--decode prev cur | trace ("decode " ++ show prev ++ " " ++ show cur) False = undefined
+decode prev cur =
+    let
+        prevInt = toInteger prev
+        curInt = toInteger cur
+        r5_1 = if prevInt == 0 then 0x92492493 else (complement 0x92492493) .&. 0xffffffff
+        r5_2 = if prevInt == 0 then (shiftR (r5_1 * prevInt) 32) .&. 0xffffffff else (shiftR (complement (r5_1 * prevInt)) 32) .&. 0xffffffff
+        r5_3 = (r5_2 + prevInt) .&. 0xff
+        r5_4 = shiftR r5_3 2
+        r6_1 = rlwinm r5_4 1 31 31
+        r5_5 = r5_4 + r6_1
+        r5_6 = (r5_5 * 7) .&. 0xffffffff
+        r7_1 = (prevInt - r5_6) .&. 0xffffffff
+        r4_1 = if r7_1 == 0 then (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm curInt 1 29 29) curInt 0 31 31) curInt 2 27 27) curInt 3 25 25) curInt 29 30 30) curInt 30 28 28) curInt 31 26 26) curInt 0 24 24) 0 24 31)
+            else if r7_1 == 1 then (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm curInt 6 24 24) curInt 1 30 30) curInt 0 29 29) curInt 29 31 31) curInt 1 26 26) curInt 31 27 27) curInt 29 28 28) curInt 31 25 25) 0 24 31)
+            else if r7_1 == 2 then (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm curInt 2 28 28) curInt 2 29 29) curInt 4 25 25) curInt 1 27 27) curInt 3 24 24) curInt 28 30 30) curInt 26 31 31) curInt 30 26 26) 0 24 31)
+            else if r7_1 == 3 then (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm curInt 31 31 31) curInt 4 27 27) curInt 3 26 26) curInt 30 30 30) curInt 31 28 28) curInt 1 25 25) curInt 1 24 24) curInt 27 29 29) 0 24 31)
+            else if r7_1 == 4 then (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm curInt 4 26 26) curInt 3 28 28) curInt 31 30 30) curInt 4 24 24) curInt 2 25 25) curInt 29 29 29) curInt 30 27 27) curInt 25 31 31) 0 24 31)
+            else if r7_1 == 5 then (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm curInt 5 25 25) curInt 5 26 26) curInt 5 24 24) curInt 0 28 28) curInt 30 29 29) curInt 27 31 31) curInt 27 30 30) curInt 29 27 27) 0 24 31)
+            else if r7_1 == 6 then (rlwinm (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwimi (rlwinm curInt 0 30 30) curInt 6 25 25) curInt 30 31 31) curInt 2 26 26) curInt 0 27 27) curInt 2 24 24) curInt 28 29 29) curInt 28 28 28) 0 24 31)
+            else error "r7 is an invalid value!"
+        r5_7 = 0x4ec4ec4f
+        r5_8 = (shiftR (r5_7 * prevInt) 32) .&. 0xffffffff
+        r5_9 = shiftR r5_8 2
+        r6_2 = rlwinm r5_9 1 31 31
+        r5_10 = r5_9 + r6_2
+        r5_11 = r5_10 * 13
+        r0_1 = (prevInt - r5_11) .&. 0xff
+        r6_3 = rlwinm r0_1 2 0 29
+        r0_2 = unkArr !! (fromInteger $ div r6_3 4)
+
+        r4_2 = (xor r4_1 r0_2)
+        r4_3 = (xor r4_2 prevInt) .&. 0xff
+        r3_1 = r4_3 + 0
+    in
+        fromInteger $ r3_1 .&. 0xff
+
 -- |Unpacks the card to raw.
 unpack :: [Word8] -> [Word8]
-unpack packed = undefined
+unpack packed =
+    let
+        blockSize = getBlockSize packed
+        blockRanges = map (\i -> (0x2050 + (0x2000 * i), 0x2050 + 0x1ff0 + (0x2000 * i))) [0..blockSize-2]
+        decodeLoop :: Integer -> Word8 -> [Word8] -> [Word8] -> [Word8]
+        decodeLoop i prev ps [] = ps
+        decodeLoop i prev [] (u:us) = decodeLoop (i+1) u [u] us
+        decodeLoop i prev (p:ps) (u:us) =
+            if any (\(f,l) -> i >= f && i < l) blockRanges
+            then decodeLoop (i+1) u ((fromIntegral $ decode (fromIntegral prev) (fromIntegral u)):p:ps) us
+            else decodeLoop (i+1) u (u:p:ps) us
+    in
+        reverse $ decodeLoop 0 0 [] packed
 
 -- |Encodes a bit correctly. See
 -- https://github.com/dansalvato/melee-gci-compiler for the algorithm source.
@@ -114,26 +189,6 @@ encode prev cur =
     let
         prevInt = toInteger prev
         curInt = toInteger cur
-        rotl :: Integer -> Integer -> Integer
-        rotl rx sh = if sh >= 32 then error "Shift must be between 0 and 31." else ((shiftL rx (fromInteger sh)) .&. 0xffffffff) .|. (shiftR rx (fromInteger ((32 - sh) .&. 31)))
-        --rotl rx sh = if sh >= 32 then error "Shift must be between 0 and 31." else rotateL rx (fromIntegral sh)
-        mask :: Integer -> Integer -> Integer
-        mask mb me =
-            let
-                x = shiftR 0xffffffff (fromInteger mb)
-                y = (shiftL 0xffffffff (31 - fromInteger me))
-            in
-                if mb >= 32 || me >= 32 then error "Arguments must be between 0 and 31."
-                else if mb <= me then x .&. y else x .|. y
-        rlwinm :: Integer -> Integer -> Integer -> Integer -> Integer
-        rlwinm rs sh mb me = (rotl rs sh) .&. (mask mb me)
-        rlwimi :: Integer -> Integer -> Integer -> Integer -> Integer -> Integer
-        rlwimi ra rs sh mb me =
-            let
-                m = mask mb me
-                r = rotl rs sh
-            in
-                (r .&. m) .|. (ra .&. (complement m))
         r5_1 = (shiftR (toInteger $ prevInt * 0x4ec4ec4f) 32) .&. 0xffffffff
         r0_1 = if prevInt == 0 then 0x92492493 else (complement 0x92492493) .&. (0xffffffff)
         r0_2 = if prevInt == 0 then (shiftR (r0_1 * prevInt) 32) .&. 0xffffffff else (shiftR (complement (r0_1 * prevInt)) 32) .&. 0xffffffff
