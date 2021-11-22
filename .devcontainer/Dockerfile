@@ -6,3 +6,5 @@ RUN curl -sSL https://get.haskellstack.org/ | sh
 
 # Add symlink for libtinfo required by dependecies
 RUN ln -s /lib/x86_64-linux-gnu/libtinfo.so.5 /lib/x86_64-linux-gnu/libtinfo.so
+
+ENV PATH="/workspaces/ssbmbo/bin/linux_x86_64:$PATH"
