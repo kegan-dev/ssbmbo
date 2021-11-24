@@ -2,7 +2,8 @@ module Lib
     ( 
         pack,
         recomputeChecksums,
-        unpack
+        unpack,
+        setupACE
     )
     where
 
@@ -277,3 +278,9 @@ recomputeChecksums badBytes =
         blocksAndChecksums = zip blockChecksums blockData
     in
         foldl (\acc (c, b) -> acc ++ c ++ b) (take 0x2040 badBytes) blocksAndChecksums
+        
+setupACE :: [Word8] -> [Word8]
+setupACE ws = let
+  (ws',ws'') = splitAt (fromIntegral $ memAddressToCardLocation 0x8045d850) ws
+  retAddr = [0x80, 0x4e, 0xe8, 0xf8, 0x80,0x45,0xd9,0x30,0x00,0x00,0x00,0x00]
+  in ws' ++ replicate (224 - length retAddr) 0xdd ++ retAddr ++ drop 224 ws''
