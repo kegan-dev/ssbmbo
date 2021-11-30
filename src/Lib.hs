@@ -10,6 +10,7 @@ module Lib
 import Data.Word
 import Data.Bits
 import Debug.Trace
+import System.IO
 
 blockList = [           --GCI block offset list
         0x02060,        --Block 0
