@@ -280,8 +280,14 @@ recomputeChecksums badBytes =
     in
         foldl (\acc (c, b) -> acc ++ c ++ b) (take 0x2040 badBytes) blocksAndChecksums
         
-setupACE :: [Word8] -> [Word8]
-setupACE ws = let
-  (ws',ws'') = splitAt (fromIntegral $ memAddressToCardLocation 0x8045d850) ws
-  retAddr = [0x80, 0x4e, 0xe8, 0xf8, 0x80,0x45,0xd9,0x30,0x00,0x00,0x00,0x00]
-  in ws' ++ replicate (224 - length retAddr) 0xdd ++ retAddr ++ drop 224 ws''
+setupACE :: [Word8] -> [Word8] -> [Word8]
+setupACE codeBin ws =
+    let
+        codeLength = length codeBin
+        (ws',ws'') = splitAt (fromIntegral $ memAddressToCardLocation 0x8045d850) ws
+        retAddr = [0x80, 0x4e, 0xe8, 0xf8, 0x80, 0x45, 0xd9, 0x30, 0x00, 0x00, 0x00, 0x00]
+        aceSetup = ws' ++ replicate (224 - length retAddr) 0xdd ++ retAddr ++ drop 224 ws''
+        (aceSetup', aceSetup'') = splitAt (fromIntegral $ memAddressToCardLocation 0x8045d930) aceSetup
+        res = aceSetup' ++ codeBin ++ drop codeLength aceSetup''
+    in
+        if length res /= 0x16040 then error "Wrong size after ACE" else res

@@ -28,7 +28,9 @@ compile = do
   putStrLn out
   removeFile "src1.o"
   removeFile "src2.o"
-  BS.unpack <$> BS.readFile "code.bin"
+  res <- BS.unpack <$> BS.readFile "code.bin"
+  removeFile "code.bin"
+  return res
 
 main :: IO ()
 main = do
@@ -39,8 +41,5 @@ main = do
     putStrLn $ "Input asm file: " ++ inputAsmFile
     putStrLn $ "Output gci file: " ++ outputGciFile
     bin <- compile
-    removeFile "code.bin"
-    BS.putStrLn (BS.pack bin)
     fContents <- BS.readFile (inputGciFile)
-    --BS.putStr (BS.pack . SSBMBO.pack . BS.unpack $ fContents)
-    BS.writeFile outputGciFile (BS.pack . SSBMBO.pack . SSBMBO.recomputeChecksums . SSBMBO.setupACE . SSBMBO.unpack . BS.unpack $ fContents)
+    BS.writeFile outputGciFile (BS.pack . SSBMBO.pack . SSBMBO.recomputeChecksums . (SSBMBO.setupACE bin) . SSBMBO.unpack . BS.unpack $ fContents)
