@@ -187,7 +187,7 @@ blrl
 
 TEXT:
 blrl
-.string "UR HACKED"
+.string "UR HACKED BY SSBMBO"
 .align 2
 
 #**************************************************#
